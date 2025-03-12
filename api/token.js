@@ -1,5 +1,5 @@
 // api/token.js
-import fetch from 'node-fetch@2';
+const fetch = require('node-fetch');
 
 // Get Forge token
 async function getForgeToken() {
