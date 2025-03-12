@@ -5,7 +5,9 @@
       { "src": "public/**", "use": "@vercel/static" }
     ],
     "routes": [
-      { "src": "/api/(.*)", "dest": "/api/$1" },
+      { "src": "/api/token", "dest": "/api/token.js" },
+      { "src": "/api/qrcode/(.*)", "dest": "/api/qrcode/[urn].js?urn=$1" },
+      { "src": "/api/check-translation/(.*)", "dest": "/api/check-translation/[urn].js?urn=$1" },
       { "src": "/(.*)", "dest": "/public/$1" }
     ],
     "env": {
