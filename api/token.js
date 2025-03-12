@@ -1,5 +1,5 @@
 // api/token.js
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 // Get Forge token
 async function getForgeToken() {
@@ -40,7 +40,7 @@ async function getForgeToken() {
 }
 
 // Vercel API handler
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     const token = await getForgeToken();
     res.status(200).json({ access_token: token });
