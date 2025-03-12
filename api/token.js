@@ -14,6 +14,7 @@ module.exports = async (req, res) => {
   }
   
   try {
+    console.log('Client ID length:', process.env.FORGE_CLIENT_ID ? process.env.FORGE_CLIENT_ID.length : 0);
     console.log('Token API called, attempting to get Forge token');
     console.log('Environment variables present:', {
       FORGE_CLIENT_ID: process.env.FORGE_CLIENT_ID ? 'Yes (hidden)' : 'No',
@@ -24,7 +25,6 @@ module.exports = async (req, res) => {
     console.log('Token successfully obtained');
     res.status(200).json({ access_token: token });
   } catch (error) {
-    console.log('Client ID length:', process.env.FORGE_CLIENT_ID ? process.env.FORGE_CLIENT_ID.length : 0);
     console.error('Error getting token:', error);
     // Return more detailed error information
     res.status(500).json({ 

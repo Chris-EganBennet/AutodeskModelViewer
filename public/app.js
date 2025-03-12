@@ -104,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // Test token and URN validity first
             
-            console.log('Client ID length:', process.env.FORGE_CLIENT_ID ? process.env.FORGE_CLIENT_ID.length : 0);
             console.log('Attempting to fetch token...');
             const tokenResponse = await fetch('/api/token');
             console.log('Token response status:', tokenResponse.status);
