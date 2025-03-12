@@ -13,8 +13,4 @@
     { "source": "/api/translate-model/:urn", "destination": "/api/translate-model/[urn].js" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
-  //"env": {
-  //  "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
-  //  "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
-  //}
 }
