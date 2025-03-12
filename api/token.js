@@ -1,5 +1,5 @@
 // api/token.js
-import fetch from 'node-fetch';
+import fetch from 'node-fetch@2';
 
 // Get Forge token
 async function getForgeToken() {
