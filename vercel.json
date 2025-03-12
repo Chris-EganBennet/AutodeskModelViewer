@@ -1,17 +1,20 @@
 {
-    "version": 2,
-    "builds": [
-      { "src": "api/*.js", "use": "@vercel/node" },
-      { "src": "public/**", "use": "@vercel/static" }
-    ],
-    "routes": [
-      { "src": "/api/token", "dest": "/api/token.js" },
-      { "src": "/api/qrcode/(.*)", "dest": "/api/qrcode/[urn].js?urn=$1" },
-      { "src": "/api/check-translation/(.*)", "dest": "/api/check-translation/[urn].js?urn=$1" },
-      { "src": "/(.*)", "dest": "/public/$1" }
-    ],
-    "env": {
-      "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
-      "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
-    }
+  "version": 2,
+  "builds": [
+    { "src": "api/*.js", "use": "@vercel/node" },
+    { "src": "api/*/*.js", "use": "@vercel/node" },
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "rewrites": [
+    { "source": "/api/token", "destination": "/api/token.js" },
+    { "source": "/api/qrcode/:urn", "destination": "/api/qrcode/[urn].js" },
+    { "source": "/api/check-translation/:urn", "destination": "/api/check-translation/[urn].js" },
+    { "source": "/api/test-urn/:urn", "destination": "/api/test-urn/[urn].js" },
+    { "source": "/api/translate-model/:urn", "destination": "/api/translate-model/[urn].js" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ],
+  "env": {
+    "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
+    "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
   }
+}
