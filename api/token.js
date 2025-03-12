@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
   }
   
   try {
-    console.log('Client ID length:', process.env.FORGE_CLIENT_ID ? process.env.FORGE_CLIENT_ID.length : 0);
+    console.log('Client ID length:', process.env.FORGE_CLIENT_ID);
     console.log('Token API called, attempting to get Forge token');
     console.log('Environment variables present:', {
       FORGE_CLIENT_ID: process.env.FORGE_CLIENT_ID ? 'Yes (hidden)' : 'No',
