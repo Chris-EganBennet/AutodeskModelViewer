@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timber Model Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Timber Model Management</h1>
+        
+        <div class="models-section">
+            <h2>Available Models</h2>
+            <select id="models">
+                <option value="">Select a model</option>
+            </select>
+            
+            <div class="model-actions">
+                <button id="view-model">View Model</button>
+                <button id="generate-qr">Generate QR Code</button>
+                <button onclick="translateModel()">Translate Selected Model</button>
+            </div>
+        </div>
+        
+        <div class="qr-section" id="qr-container" style="display: none;">
+            <h2>QR Code</h2>
+            <div class="qr-code">
+                <img id="qr-image" src="" alt="QR Code">
+            </div>
+            <p>Scan this code to view the model</p>
+            <button id="download-qr">Download QR Code</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+<script>
+    function translateModel() {
+      const urn = document.getElementById('models').value;
+      fetch('/api/translate-model/' + urn, {method: 'POST'})
+        .then(response => response.json())
+        .then(data => alert('Translation started: ' + JSON.stringify(data)))
+        .catch(error => alert('Error: ' + error));
+    }
+</script>
+</html>

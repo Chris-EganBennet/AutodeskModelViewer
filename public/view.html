@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timber Model Viewer - Debug Mode</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css">
+    <style>
+        #debug-panel {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .debug-info {
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        .debug-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .debug-success {
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewer"></div>
+    <div id="model-info"></div>
+    <div id="debug-panel">
+        <h3>Debug Information</h3>
+        <div id="debug-output"></div>
+    </div>
+
+    <script>
+        // Debug logging function
+        function debugLog(message, type = 'info') {
+            const debugOutput = document.getElementById('debug-output');
+            const logEntry = document.createElement('div');
+            logEntry.className = `debug-${type}`;
+            
+            // If message is an object, stringify it
+            if (typeof message === 'object') {
+                try {
+                    message = JSON.stringify(message, null, 2);
+                } catch (e) {
+                    message = message.toString();
+                }
+            }
+            
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            debugOutput.appendChild(logEntry);
+            console.log(`[DEBUG] ${message}`);
+        }
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const urn = urlParams.get('urn');
+        
+        debugLog(`URN from URL: ${urn}`);
+        
+        if (!urn) {
+            document.getElementById('model-info').innerHTML = 'No model selected';
+            debugLog('No URN provided in URL', 'error');
+        } else {
+            // Initialize viewer
+            debugLog('Initializing viewer...');
+            initViewer();
+        }
+
+        async function initViewer() {
+            try {
+                // Get token from server
+                debugLog('Requesting access token...');
+                const response = await fetch('/api/token');
+                const data = await response.json();
+                const token = data.access_token;
+
+                if (!token) {
+                    throw new Error('Failed to get access token');
+                }
+                
+                debugLog('Token received successfully');
+                
+                // Before initializing viewer, check manifest
+                debugLog('Checking model translation status...');
+                const checkResponse = await fetch(`/api/check-translation/${urn}`);
+                const checkData = await checkResponse.json();
+                debugLog(`Translation check result: ${checkData.status}`);
+                
+                if (checkData.status !== 'success') {
+                    debugLog(`Model issue: ${checkData.message || 'Unknown error'}`, 'error');
+                    document.getElementById('model-info').innerHTML = 'Model not ready: ' + 
+                        (checkData.message || 'Unknown error');
+                    return;
+                }
+
+                // Initialize Autodesk Viewer
+                debugLog('Setting up viewer...');
+                const viewerElement = document.getElementById('viewer');
+                const viewer = new Autodesk.Viewing.GuiViewer3D(viewerElement, {
+                    extensions: ['Autodesk.DocumentBrowser']
+                });
+
+                const options = {
+                    env: 'AutodeskProduction',
+                    api: 'derivativeV2',
+                    region: 'eu',  // Specify EU region
+                    getAccessToken: (onTokenReady) => {
+                        debugLog('Providing token to viewer');
+                        onTokenReady(token, 3600);
+                    }
+                };
+
+                Autodesk.Viewing.Initializer(options, () => {
+                    debugLog('Viewer initialized, starting...');
+                    viewer.start();
+                    loadDocument(viewer, urn);
+                });
+            } catch (error) {
+                console.error('Error initializing viewer:', error);
+                debugLog(`Error initializing viewer: ${error.message}`, 'error');
+                document.getElementById('model-info').innerHTML = 'Error loading model: ' + error.message;
+            }
+        }
+
+        function loadDocument(viewer, urn) {
+            // Try to determine correct format for URN
+            debugLog(`Processing URN: ${urn}`);
+            
+            let documentId = urn;
+            
+            // Make sure it's properly formed for the viewer
+            if (!documentId.startsWith('urn:')) {
+                documentId = 'urn:' + documentId;
+                debugLog(`Added 'urn:' prefix, now: ${documentId}`);
+            }
+            
+            debugLog(`Loading document with ID: ${documentId}`);
+            
+            Autodesk.Viewing.Document.load(
+                documentId,
+                onDocumentLoadSuccess,
+                onDocumentLoadFailure
+            );
+
+            function onDocumentLoadSuccess(doc) {
+                debugLog('Document loaded successfully', 'success');
+                try {
+                    const viewables = doc.getRoot().getDefaultGeometry();
+                    debugLog('Default geometry found');
+                    viewer.loadDocumentNode(doc, viewables);
+                    document.getElementById('model-info').innerHTML = 'Model loaded successfully';
+                } catch (error) {
+                    debugLog(`Error processing document: ${error.message}`, 'error');
+                    document.getElementById('model-info').innerHTML = 'Error processing document: ' + error.message;
+                }
+            }
+
+            function onDocumentLoadFailure(error) {
+                console.error('Error loading document:', error);
+                debugLog(`Error loading document: ${error.message || error}`, 'error');
+                
+                // Try to get more details
+                if (error && error.hasOwnProperty('status')) {
+                    debugLog(`Status code: ${error.status}`, 'error');
+                }
+                
+                if (error && error.hasOwnProperty('msg')) {
+                    debugLog(`Error message: ${error.msg}`, 'error');
+                }
+                
+                document.getElementById('model-info').innerHTML = 'Error loading document: ' + 
+                    (error.message || error.msg || 'Unknown error');
+            }
+        }
+    </script>
+</body>
+</html>
