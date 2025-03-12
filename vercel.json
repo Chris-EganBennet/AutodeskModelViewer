@@ -12,9 +12,9 @@
     { "source": "/api/test-urn/:urn", "destination": "/api/test-urn/[urn].js" },
     { "source": "/api/translate-model/:urn", "destination": "/api/translate-model/[urn].js" },
     { "source": "/(.*)", "destination": "/public/$1" }
-  ],
-  "env": {
-    "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
-    "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
-  }
+  ]
+  //"env": {
+  //  "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
+  //  "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
+  //}
 }
