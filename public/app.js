@@ -93,7 +93,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // View model in viewer - improved debugging
     viewModelBtn.addEventListener('click', async () => {
         const urn = modelsDropdown.value;
         if (!urn) {
@@ -103,7 +102,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         try {
             // Test token and URN validity first
+            console.log('Attempting to fetch token...');
             const tokenResponse = await fetch('/api/token');
+            console.log('Token response status:', tokenResponse.status);
+            
+            // Check if response is JSON
+            const contentType = tokenResponse.headers.get('content-type');
+            console.log('Content-Type:', contentType);
+            
+            if (!contentType || !contentType.includes('application/json')) {
+                // Try to get the text response to see the error
+                const textResponse = await tokenResponse.text();
+                console.error('Non-JSON response:', textResponse);
+                alert('Server returned an error: ' + textResponse.substring(0, 100) + '...');
+                return;
+            }
+            
             const tokenData = await tokenResponse.json();
             if (!tokenData.access_token) {
                 throw new Error('Failed to get access token');
