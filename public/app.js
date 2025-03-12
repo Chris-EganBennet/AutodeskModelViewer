@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
+    // Enhanced view model function with better error handling
     viewModelBtn.addEventListener('click', async () => {
         const urn = modelsDropdown.value;
         if (!urn) {
@@ -119,8 +120,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const tokenData = await tokenResponse.json();
+            console.log('Token API response data:', tokenData);
+            
             if (!tokenData.access_token) {
-                throw new Error('Failed to get access token');
+                if (tokenData.error) {
+                    throw new Error(`${tokenData.error}: ${tokenData.message || 'No additional details'}`);
+                } else {
+                    throw new Error('Failed to get access token');
+                }
             }
             
             console.log('Obtained token successfully');

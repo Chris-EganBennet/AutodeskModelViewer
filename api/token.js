@@ -1,6 +1,5 @@
-// api/token.js
+// api/token.js - Standalone version without helper dependency
 const fetch = require('node-fetch');
-const { getForgeToken } = require('./_helpers/forge');
 
 module.exports = async (req, res) => {
   // Set CORS headers
@@ -14,10 +13,45 @@ module.exports = async (req, res) => {
   }
   
   try {
-    const token = await getForgeToken();
-    res.status(200).json({ access_token: token });
+    console.log('Token API called, attempting to get Forge token');
+    console.log('Environment variables present:', {
+      FORGE_CLIENT_ID: process.env.FORGE_CLIENT_ID ? 'Yes (hidden)' : 'No',
+      FORGE_CLIENT_SECRET: process.env.FORGE_CLIENT_SECRET ? 'Yes (hidden)' : 'No'
+    });
+    
+    // Get token directly without helper
+    const response = await fetch(
+      'https://developer.api.autodesk.com/authentication/v2/token',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          client_id: process.env.FORGE_CLIENT_ID,
+          client_secret: process.env.FORGE_CLIENT_SECRET,
+          grant_type: 'client_credentials',
+          scope: 'data:read data:write viewables:read bucket:read account:read user-profile:read'
+        })
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!data.access_token) {
+      console.error('Authentication error from Forge:', data);
+      throw new Error(`Authentication failed: ${JSON.stringify(data)}`);
+    }
+    
+    console.log('Authentication successful');
+    res.status(200).json({ access_token: data.access_token });
   } catch (error) {
     console.error('Error getting token:', error);
-    res.status(500).json({ error: 'Failed to get access token' });
+    // Return more detailed error information
+    res.status(500).json({ 
+      error: 'Failed to get access token', 
+      message: error.message,
+      name: error.name
+    });
   }
 };
