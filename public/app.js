@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const accModels = [
                     // Your actual model from ACC (with Base64 encoding)
                     { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLlgzWm8tRGUxVGZLRGpwek04SEZmQXc_dmVyc2lvbj00', name: 'FF - Externals (Real ACC Model)' },
+                    { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLmhmR25yTjlmU3lLZHVnTWhpQ3pOWmc_dmVyc2lvbj00', name: 'Collins - Kilnaboy' },
                     
                     // Demo models as fallback
                     { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9mb28uZHdm', name: 'Pine Timber (Demo)' },
@@ -82,8 +83,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 loadDemoModels();
                 return;
             }
-            
-            // Rest of your function remains the same...
         } catch (error) {
             console.error('Error loading models:', error);
             alert('Failed to load models. See console for details.');
@@ -91,46 +90,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (modelsDropdown.children.length <= 1) {
             console.warn('No models found, adding fallback demo models');
             loadDemoModels();
-          }
-    }
-
-    async function testUrnVariations() {
-        const baseUrn = 'dXJuOmFkc2sud2lwZW1lYTpkbS5saW5lYWdlOmhmR25yTjlmU3lLZHVnTWhpQ3pOWmc=';
-        
-        // Different URN variations to try
-        const variations = [
-          baseUrn,                                    // Original
-          'urn:' + baseUrn,                           // With urn: prefix
-          baseUrn.replace(/=$/, ''),                  // Without trailing = if any
-          btoa('urn:adsk.wipemea:dm.lineage:hfGnrN9fSyKdugMhiCzNZg'), // Re-encoded
-          'dXJuOmFkc2sud2lwZW1lYTpkbS5saW5lYWdlOmhmR25yTjlmU3lLZHVnTWhpQ3pOWmc'  // Without trailing =
-        ];
-        
-        console.log('Testing URN variations:');
-        
-        for (const [index, urn] of variations.entries()) {
-          console.log(`Testing URN variation ${index + 1}: ${urn}`);
-          
-          try {
-            const response = await fetch(`/api/test-acc-model/${urn}`);
-            const data = await response.json();
-            
-            console.log(`URN test ${index + 1} result:`, 
-              data.manifestResult.status === 'success' ? 'SUCCESS' : 'FAILED', 
-              data.diagnosis);
-            
-            if (data.manifestResult.status === 'success') {
-              console.log('FOUND WORKING URN:', urn);
-              return urn; // Return the first working URN
-            }
-          } catch (error) {
-            console.error(`Error testing URN variation ${index + 1}:`, error);
-          }
         }
-        
-        console.log('No working URN variation found');
-        return null;
-      }
+    }
     
     // View model in viewer - improved debugging
     viewModelBtn.addEventListener('click', async () => {
@@ -197,3 +158,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize
     loadModels();
 });
+
+function translateModel() {
+    const urn = document.getElementById('models').value;
+    if (!urn) {
+        alert('Please select a model first');
+        return;
+    }
+    
+    fetch('/api/translate-model/' + urn, {method: 'POST'})
+        .then(response => response.json())
+        .then(data => alert('Translation started: ' + JSON.stringify(data)))
+        .catch(error => alert('Error: ' + error));
+}
