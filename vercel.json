@@ -9,7 +9,7 @@
       { "src": "/(.*)", "dest": "/public/$1" }
     ],
     "env": {
-      "FORGE_CLIENT_ID": "@forge_client_id",
-      "FORGE_CLIENT_SECRET": "@forge_client_secret"
+      "FORGE_CLIENT_ID": "${FORGE_CLIENT_ID}",
+      "FORGE_CLIENT_SECRET": "${FORGE_CLIENT_SECRET}"
     }
   }
