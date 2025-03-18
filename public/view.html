@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timber Model Viewer - Debug Mode</title>
+    <title>Timber Model Viewer</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
     <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css">
@@ -38,7 +38,14 @@
         <div id="debug-output"></div>
     </div>
 
+    <script src="/js/ElementFinderExtension.js"></script>
     <script>
+        // Register our custom extension
+        Autodesk.Viewing.theExtensionManager.registerExtension(
+            'ElementFinderExtension', 
+            ElementFinderExtension
+        );
+        
         // Debug logging function
         function debugLog(message, type = 'info') {
             const debugOutput = document.getElementById('debug-output');
@@ -61,8 +68,12 @@
         
         const urlParams = new URLSearchParams(window.location.search);
         const urn = urlParams.get('urn');
+        const elementId = urlParams.get('elementId');
         
         debugLog(`URN from URL: ${urn}`);
+        if (elementId) {
+            debugLog(`Element ID to highlight: ${elementId}`);
+        }
         
         if (!urn) {
             document.getElementById('model-info').innerHTML = 'No model selected';
@@ -104,7 +115,7 @@
                 debugLog('Setting up viewer...');
                 const viewerElement = document.getElementById('viewer');
                 const viewer = new Autodesk.Viewing.GuiViewer3D(viewerElement, {
-                    extensions: ['Autodesk.DocumentBrowser']
+                    extensions: ['Autodesk.DocumentBrowser', 'ElementFinderExtension']
                 });
 
                 const options = {
@@ -119,6 +130,15 @@
 
                 Autodesk.Viewing.Initializer(options, () => {
                     debugLog('Viewer initialized, starting...');
+                    
+                    // If elementId is provided, pass it to the extension
+                    if (elementId) {
+                        // Add the search term to the options for our extension
+                        viewer.loadExtension('ElementFinderExtension', { 
+                            searchTerm: elementId 
+                        });
+                    }
+                    
                     viewer.start();
                     loadDocument(viewer, urn);
                 });
@@ -156,6 +176,13 @@
                     debugLog('Default geometry found');
                     viewer.loadDocumentNode(doc, viewables);
                     document.getElementById('model-info').innerHTML = 'Model loaded successfully';
+                    
+                    // Set up event to highlight element after model is fully loaded
+                    if (elementId) {
+                        viewer.addEventListener(Autodesk.Viewing.GEOMETRY_LOADED_EVENT, function() {
+                            highlightElement(viewer, elementId);
+                        });
+                    }
                 } catch (error) {
                     debugLog(`Error processing document: ${error.message}`, 'error');
                     document.getElementById('model-info').innerHTML = 'Error processing document: ' + error.message;
@@ -177,6 +204,34 @@
                 
                 document.getElementById('model-info').innerHTML = 'Error loading document: ' + 
                     (error.message || error.msg || 'Unknown error');
+            }
+        }
+        
+        // Function to highlight a specific element
+        function highlightElement(viewer, elementId) {
+            debugLog(`Attempting to highlight element: ${elementId}`);
+            
+            // Use our custom extension to find and highlight the element
+            const elementFinder = viewer.getExtension('ElementFinderExtension');
+            
+            if (elementFinder) {
+                // The extension already has the search term from initialization
+                // But we can also call the search directly
+                elementFinder.findElementByName(elementId);
+                debugLog(`Element search initiated for: ${elementId}`, 'success');
+            } else {
+                debugLog('ElementFinderExtension not available', 'error');
+                
+                // Fallback to basic selection if extension isn't available
+                const dbId = parseInt(elementId);
+                if (!isNaN(dbId)) {
+                    viewer.clearSelection();
+                    viewer.select(dbId);
+                    viewer.fitToView([dbId]);
+                    debugLog(`Basic selection applied for dbId: ${dbId}`, 'success');
+                } else {
+                    debugLog('Cannot highlight element without the extension for text search', 'error');
+                }
             }
         }
     </script>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Element Highlighting QR Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .qr-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        
+        .qr-preview img {
+            max-width: 250px;
+            margin-bottom: 10px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .url-display {
+            word-break: break-all;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Element Highlighting QR Generator</h1>
+        <p>Create QR codes that open models with specific elements highlighted</p>
+        
+        <div class="form-group">
+            <label for="models">Select Model</label>
+            <select id="models" class="form-control">
+                <option value="">Select a model</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="elementId">Element ID or Name</label>
+            <input type="text" id="elementId" class="form-control" placeholder="Enter the element ID (e.g., QWEB_STR_LVL-LSL [717447])">
+            <small>This can be the dbId, external ID, or a distinctive part of the element name</small>
+        </div>
+        
+        <button id="generate-qr" class="primary-btn">Generate QR Code</button>
+        
+        <div id="qr-container" class="qr-preview" style="display: none;">
+            <h3>QR Code with Element Highlighting</h3>
+            <img id="qr-image" src="" alt="QR Code">
+            <p>Scan this code to view the model with the specified element highlighted</p>
+            
+            <div class="url-display" id="url-display"></div>
+            
+            <div class="button-group">
+                <button id="download-qr" class="primary-btn">Download QR Code</button>
+                <button id="test-link" class="secondary-btn">Test Link</button>
+                <button id="copy-url" class="secondary-btn">Copy URL</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Elements
+            const modelsDropdown = document.getElementById('models');
+            const elementIdInput = document.getElementById('elementId');
+            const generateQrBtn = document.getElementById('generate-qr');
+            const qrContainer = document.getElementById('qr-container');
+            const qrImage = document.getElementById('qr-image');
+            const urlDisplay = document.getElementById('url-display');
+            const downloadQrBtn = document.getElementById('download-qr');
+            const testLinkBtn = document.getElementById('test-link');
+            const copyUrlBtn = document.getElementById('copy-url');
+            
+            // Get token for Forge API
+            async function getToken() {
+                try {
+                    const response = await fetch('/api/token');
+                    const data = await response.json();
+                    return data.access_token;
+                } catch (error) {
+                    console.error('Error getting token:', error);
+                    return null;
+                }
+            }
+            
+            // Fetch and populate models
+            async function loadModels() {
+                try {
+                    // Try to get token but continue with demo models if it fails
+                    let token;
+                    try {
+                        token = await getToken();
+                        if (!token) throw new Error('Failed to get access token');
+                    } catch (tokenError) {
+                        console.warn('Authentication error:', tokenError.message);
+                        console.warn('Falling back to demo models...');
+                        loadDemoModels();
+                        return;
+                    }
+                    
+                    // Function to load demo models
+                    function loadDemoModels() {
+                        // Real models from your ACC account
+                        const accModels = [
+                            // Your actual model from ACC (with Base64 encoding)
+                            { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLlgzWm8tRGUxVGZLRGpwek04SEZmQXc_dmVyc2lvbj00', name: 'FF - Externals (Real ACC Model)' },
+                            { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLmhmR25yTjlmU3lLZHVnTWhpQ3pOWmc_dmVyc2lvbj00', name: 'Collins - Kilnaboy' },
+                            
+                            // Demo models as fallback
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9mb28uZHdm', name: 'Pine Timber (Demo)' },
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9iYXIuZHdm', name: 'Oak Timber (Demo)' },
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9iYXouZHdm', name: 'Maple Timber (Demo)' }
+                        ];
+                        
+                        accModels.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model.urn;
+                            option.textContent = model.name;
+                            modelsDropdown.appendChild(option);
+                        });
+                    }
+                    
+                    // Try to get models from ACC
+                    try {
+                        const hubsResponse = await fetch(
+                            'https://developer.api.autodesk.com/project/v1/hubs',
+                            {
+                                headers: {
+                                    'Authorization': 'Bearer ' + token
+                                }
+                            }
+                        );
+                        
+                        const hubsData = await hubsResponse.json();
+                        
+                        if (!hubsData.data || hubsData.data.length === 0) {
+                            console.warn('No hubs found in your account. Using demo models.');
+                            loadDemoModels();
+                            return;
+                        }
+                        
+                        // Process hubs to get models (simplified)
+                        loadDemoModels();
+                        
+                    } catch (error) {
+                        console.error('Error fetching hubs:', error);
+                        console.warn('Using demo models as fallback.');
+                        loadDemoModels();
+                    }
+                    
+                } catch (error) {
+                    console.error('Error loading models:', error);
+                    alert('Failed to load models. See console for details.');
+                    loadDemoModels();
+                }
+            }
+            
+            // Generate QR code with element highlighting
+            generateQrBtn.addEventListener('click', async () => {
+                const urn = modelsDropdown.value;
+                const elementId = elementIdInput.value.trim();
+                
+                if (!urn) {
+                    alert('Please select a model first');
+                    return;
+                }
+                
+                try {
+                    // Build the URL for the API call
+                    let apiUrl = `/api/qrcode/${urn}`;
+                    if (elementId) {
+                        apiUrl += `?elementId=${encodeURIComponent(elementId)}`;
+                    }
+                    
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    qrImage.src = data.qrCode;
+                    urlDisplay.textContent = data.url || 'URL not available';
+                    qrContainer.style.display = 'block';
+                } catch (error) {
+                    console.error('Error generating QR code:', error);
+                    alert('Failed to generate QR code');
+                }
+            });
+            
+            // Download QR code
+            downloadQrBtn.addEventListener('click', () => {
+                const modelName = modelsDropdown.options[modelsDropdown.selectedIndex].textContent;
+                const elementIdText = elementIdInput.value.trim() ? `-${elementIdInput.value.trim().replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+                
+                const link = document.createElement('a');
+                link.href = qrImage.src;
+                link.download = `qrcode-${modelName}${elementIdText}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            
+            // Test the link
+            testLinkBtn.addEventListener('click', () => {
+                const url = urlDisplay.textContent;
+                if (url) {
+                    window.open(url, '_blank');
+                }
+            });
+            
+            // Copy URL to clipboard
+            copyUrlBtn.addEventListener('click', () => {
+                const url = urlDisplay.textContent;
+                if (url) {
+                    navigator.clipboard.writeText(url)
+                        .then(() => {
+                            alert('URL copied to clipboard');
+                        })
+                        .catch(err => {
+                            console.error('Could not copy URL: ', err);
+                            alert('Failed to copy URL');
+                        });
+                }
+            });
+            
+            // Initialize
+            loadModels();
+        });
+    </script>
+</body>
+</html>
