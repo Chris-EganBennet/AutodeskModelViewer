@@ -39,6 +39,7 @@
     </div>
 
     <script src="/js/ElementFinderExtension.js"></script>
+    <script src="/js/ElementPathHelper.js"></script>
     <script>
         // Register our custom extension
         Autodesk.Viewing.theExtensionManager.registerExtension(
@@ -69,10 +70,14 @@
         const urlParams = new URLSearchParams(window.location.search);
         const urn = urlParams.get('urn');
         const elementId = urlParams.get('elementId');
+        const elementPath = urlParams.get('elementPath');
         
         debugLog(`URN from URL: ${urn}`);
         if (elementId) {
             debugLog(`Element ID to highlight: ${elementId}`);
+        }
+        if (elementPath) {
+            debugLog(`Element Path to highlight: ${elementPath}`);
         }
         
         if (!urn) {
@@ -136,6 +141,41 @@
                         // Add the search term to the options for our extension
                         viewer.loadExtension('ElementFinderExtension', { 
                             searchTerm: elementId 
+                        });
+                    }
+                    
+                    // Check for element path (alternative method for deep hierarchies)
+                    if (elementPath) {
+                        viewer.addEventListener(Autodesk.Viewing.OBJECT_TREE_CREATED_EVENT, function() {
+                            // Allow time for the model to fully load
+                            setTimeout(() => {
+                                debugLog(`Processing element path: ${elementPath}`, 'info');
+                                
+                                // Create path helper
+                                const pathHelper = new ElementPathHelper(viewer);
+                                
+                                // Find elements matching the path
+                                pathHelper.findElementByPath(elementPath)
+                                    .then(dbIds => {
+                                        if (dbIds && dbIds.length > 0) {
+                                            debugLog(`Found ${dbIds.length} elements matching path`, 'success');
+                                            
+                                            // Highlight these elements (using the extension if available)
+                                            const elementFinder = viewer.getExtension('ElementFinderExtension');
+                                            if (elementFinder) {
+                                                elementFinder.highlightElements(dbIds);
+                                            } else {
+                                                viewer.select(dbIds);
+                                                viewer.fitToView(dbIds);
+                                            }
+                                        } else {
+                                            debugLog(`No elements found matching path: ${elementPath}`, 'error');
+                                        }
+                                    })
+                                    .catch(err => {
+                                        debugLog(`Error processing element path: ${err.message}`, 'error');
+                                    });
+                            }, 2000);
                         });
                     }
                     

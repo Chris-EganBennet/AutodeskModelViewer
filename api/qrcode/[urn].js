@@ -14,7 +14,10 @@ module.exports = async (req, res) => {
   
   try {
     const { urn } = req.query;
+    
+    // Get element ID parameters - support both formats
     const elementId = req.query.elementId || '';
+    const elementPath = req.query.elementPath || '';
     
     if (!urn) {
       return res.status(400).json({ error: 'URN parameter is required' });
@@ -25,15 +28,30 @@ module.exports = async (req, res) => {
     const protocol = hostname.includes('localhost') ? 'http' : 'https';
     const baseUrl = `${protocol}://${hostname}`;
     
-    // Create URL with both URN and elementId (if provided)
+    // Create URL with parameters
     let url = `${baseUrl}/view.html?urn=${urn}`;
+    
+    // Add element ID if provided (direct ID or name)
     if (elementId) {
       url += `&elementId=${encodeURIComponent(elementId)}`;
     }
     
+    // Add element path if provided (for deeply nested elements)
+    if (elementPath) {
+      url += `&elementPath=${encodeURIComponent(elementPath)}`;
+    }
+    
     const qrCode = await QRCode.toDataURL(url);
     
-    res.status(200).json({ qrCode, url });
+    res.status(200).json({ 
+      qrCode, 
+      url,
+      params: {
+        urn,
+        elementId: elementId || null,
+        elementPath: elementPath || null
+      }
+    });
   } catch (error) {
     console.error('Error generating QR code:', error);
     res.status(500).json({ error: 'Failed to generate QR code' });

@@ -8,10 +8,11 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
         this.searchTerm = options.searchTerm || '';
         this.propertyDatabase = null;
         this.foundIds = [];
+        this.debugMode = true; // Set to true to see detailed logs
     }
 
     load() {
-        console.log('ElementFinderExtension loaded');
+        this.log('ElementFinderExtension loaded');
         
         // When search term is provided, start search after model is fully loaded
         if (this.searchTerm) {
@@ -19,7 +20,7 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
                 // Give the property database time to initialize
                 setTimeout(() => {
                     this.findElementByName(this.searchTerm);
-                }, 1000);
+                }, 1500);
             });
         }
         
@@ -27,13 +28,20 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
     }
 
     unload() {
-        console.log('ElementFinderExtension unloaded');
+        this.log('ElementFinderExtension unloaded');
         return true;
+    }
+    
+    // Helper for conditional logging
+    log(message, type) {
+        if (this.debugMode) {
+            console.log(`[ElementFinder] ${message}`);
+        }
     }
 
     // Search for an element by name or partial name match
     async findElementByName(searchTerm) {
-        console.log(`Searching for element containing: "${searchTerm}"`);
+        this.log(`Searching for element containing: "${searchTerm}"`);
         
         const model = this.viewer.model;
         if (!model) {
@@ -52,23 +60,29 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
                 return;
             }
             
-            // Then try with the instance tree for exact name matches
-            await this.searchWithInstanceTree(searchTerm);
+            // Try deep tree search first (most thorough)
+            await this.deepInstanceTreeSearch(searchTerm);
             
-            // If no results, try with the property database for partial matches
+            // If no results, try with property search
             if (this.foundIds.length === 0) {
                 await this.searchWithPropertyDatabase(searchTerm);
             }
             
-            // If still no results, try a more flexible search
+            // If still no results, try substring matching
             if (this.foundIds.length === 0) {
-                await this.searchAllProperties(searchTerm);
+                // Remove brackets and try again
+                const cleanTerm = searchTerm.replace(/\[.*?\]/g, '').trim();
+                if (cleanTerm !== searchTerm) {
+                    this.log(`Trying again with cleaned term: "${cleanTerm}"`);
+                    await this.deepInstanceTreeSearch(cleanTerm);
+                }
             }
             
             // If we found matching elements, highlight them
             if (this.foundIds.length > 0) {
                 this.highlightElements(this.foundIds);
             } else {
+                this.log(`No elements found matching: "${searchTerm}"`);
                 console.warn(`No elements found matching: "${searchTerm}"`);
             }
         } catch (error) {
@@ -76,61 +90,95 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
         }
     }
     
-    // Method 1: Search using the instance tree (faster but less flexible)
-    async searchWithInstanceTree(searchTerm) {
+    // Deep recursive search through the instance tree
+    async deepInstanceTreeSearch(searchTerm) {
         return new Promise((resolve) => {
             const model = this.viewer.model;
             const instanceTree = model.getInstanceTree();
             
             if (!instanceTree) {
-                console.warn('Instance tree not available');
+                this.log('Instance tree not available');
                 resolve();
                 return;
             }
             
             const searchLower = searchTerm.toLowerCase();
-            let matchFound = false;
             
-            // Process each node
-            instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId) => {
-                model.getProperties(dbId, (result) => {
-                    // Check name property
-                    const name = result.name || '';
-                    const nameMatches = name.toLowerCase().includes(searchLower);
-                    
-                    // Check external ID
-                    const externalId = result.externalId || '';
-                    const externalIdMatches = externalId.toLowerCase().includes(searchLower);
-                    
-                    if (nameMatches || externalIdMatches) {
-                        console.log(`Found matching element: "${name}" (dbId: ${dbId})`);
-                        this.foundIds.push(dbId);
-                        matchFound = true;
-                    }
+            // Queue for breadth-first traversal
+            const queue = [];
+            const processed = new Set();
+            
+            // Start with root node
+            const rootId = instanceTree.getRootId();
+            queue.push(rootId);
+            processed.add(rootId);
+            
+            // Process all nodes in breadth-first order
+            const processQueue = () => {
+                if (queue.length === 0) {
+                    this.log(`Deep search complete, found ${this.foundIds.length} matches`);
+                    resolve();
+                    return;
+                }
+                
+                // Process a batch of nodes
+                const batchSize = Math.min(20, queue.length);
+                const batch = queue.splice(0, batchSize);
+                let completedCount = 0;
+                
+                batch.forEach(dbId => {
+                    // Get node properties
+                    model.getProperties(dbId, (props) => {
+                        completedCount++;
+                        
+                        // Check name property
+                        const name = props.name || '';
+                        const externalId = props.externalId || '';
+                        
+                        if (name.toLowerCase().includes(searchLower) || 
+                            externalId.toLowerCase().includes(searchLower)) {
+                            this.log(`Found match: "${name}" (dbId: ${dbId})`);
+                            if (!this.foundIds.includes(dbId)) {
+                                this.foundIds.push(dbId);
+                            }
+                        }
+                        
+                        // Add children to queue
+                        instanceTree.enumNodeChildren(dbId, (childId) => {
+                            if (!processed.has(childId)) {
+                                queue.push(childId);
+                                processed.add(childId);
+                            }
+                        });
+                        
+                        // Continue processing queue when batch is done
+                        if (completedCount === batch.length) {
+                            setTimeout(processQueue, 0);
+                        }
+                    });
                 });
-            });
+            };
             
-            // Wait a moment for async property lookups to complete
-            setTimeout(() => {
-                console.log(`Found ${this.foundIds.length} elements with instance tree search`);
-                resolve();
-            }, 1000);
+            // Start processing
+            processQueue();
         });
     }
     
-    // Method 2: Search using the property database (more thorough)
+    // Method 2: Search using the property database
     async searchWithPropertyDatabase(searchTerm) {
         return new Promise((resolve) => {
-            const model = this.viewer.model;
-            
-            // Search for property "Name" containing our search term
+            // Try a more aggressive search
             this.viewer.search(searchTerm, (dbIds) => {
                 if (dbIds && dbIds.length > 0) {
-                    console.log(`Found ${dbIds.length} elements with property database search`);
-                    this.foundIds = [...this.foundIds, ...dbIds];
+                    this.log(`Found ${dbIds.length} elements with property search`);
+                    dbIds.forEach(id => {
+                        if (!this.foundIds.includes(id)) {
+                            this.foundIds.push(id);
+                        }
+                    });
                 }
                 resolve();
-            }, null, ['Name']);
+            });
         });
     }
     
@@ -138,7 +186,7 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
     highlightElements(dbIds) {
         if (!dbIds || dbIds.length === 0) return;
         
-        console.log(`Highlighting ${dbIds.length} elements`);
+        this.log(`Highlighting ${dbIds.length} elements`);
         
         // Clear any current selection
         this.viewer.clearSelection();
@@ -149,110 +197,57 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
         // Zoom to the elements
         this.viewer.fitToView(dbIds);
         
-        // Optionally isolate the elements (uncomment if desired)
-        // this.viewer.isolate(dbIds);
+        // Apply custom highlighting
+        this.applyCustomHighlighting(dbIds);
         
-        // Add visual indicators
-        this.applyColorToElements(dbIds);
+        // Provide additional information in the UI
+        this.showElementInfo(dbIds);
     }
     
-    // Apply color to highlight elements
-    applyColorToElements(dbIds) {
+    // Apply custom visual highlighting
+    applyCustomHighlighting(dbIds) {
         const model = this.viewer.model;
         
-        // Create a custom material for highlighting
-        const material = new THREE.MeshPhongMaterial({
-            color: new THREE.Color(1, 0.5, 0),  // Orange highlight
-            transparent: true,
-            opacity: 0.7,
-            side: THREE.DoubleSide
-        });
+        // Apply custom color to make the highlight more visible
+        const highlightColor = new THREE.Vector4(1, 0.5, 0, 0.7); // Orange with alpha
         
-        // Apply the material to elements
-        for (const dbId of dbIds) {
-            this.viewer.setThemingColor(dbId, new THREE.Vector4(1, 0.5, 0, 0.7));
-        }
+        dbIds.forEach(dbId => {
+            this.viewer.setThemingColor(dbId, highlightColor);
+        });
     }
     
-    // Method 3: Search all properties (slowest but most thorough)
-    async searchAllProperties(searchTerm) {
-        return new Promise((resolve) => {
-            const model = this.viewer.model;
-            const searchLower = searchTerm.toLowerCase();
-            let matchFound = false;
+    // Show information about the highlighted element
+    showElementInfo(dbIds) {
+        if (dbIds.length === 0) return;
+        
+        const model = this.viewer.model;
+        const dbId = dbIds[0]; // Show info for the first element if multiple
+        
+        // Get properties for display
+        model.getProperties(dbId, (props) => {
+            this.log(`Element details for dbId ${dbId}:`);
+            this.log(`- Name: ${props.name || 'N/A'}`);
+            this.log(`- Category: ${props.category || 'N/A'}`);
+            this.log(`- External ID: ${props.externalId || 'N/A'}`);
             
-            // Get all leaf nodes
-            const allDbIds = [];
-            const instanceTree = model.getInstanceTree();
-            
-            if (instanceTree) {
-                instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId) => {
-                    // Check if it's a leaf node (actual element, not a group)
-                    if (instanceTree.getChildCount(dbId) === 0) {
-                        allDbIds.push(dbId);
-                    }
-                });
+            // Display information in a panel if desired
+            // This is optional and can be expanded
+            const modelInfoElement = document.getElementById('model-info');
+            if (modelInfoElement) {
+                modelInfoElement.innerHTML = `
+                    <div>
+                        <strong>Selected Element:</strong> ${props.name || 'Unknown'}
+                        <br>
+                        <strong>ID:</strong> ${dbId}
+                    </div>
+                `;
             }
-            
-            console.log(`Checking ${allDbIds.length} elements for matches...`);
-            
-            // Limit the search to avoid performance issues
-            const maxElements = Math.min(allDbIds.length, 1000);
-            let processedCount = 0;
-            
-            // Process elements in smaller batches
-            const batchSize = 20;
-            const batches = [];
-            
-            for (let i = 0; i < maxElements; i += batchSize) {
-                batches.push(allDbIds.slice(i, i + batchSize));
-            }
-            
-            // Process batches sequentially to avoid overwhelming the browser
-            const processBatch = (batchIndex) => {
-                if (batchIndex >= batches.length) {
-                    console.log(`Completed deep search. Found ${this.foundIds.length} matches`);
-                    resolve();
-                    return;
-                }
-                
-                const batch = batches[batchIndex];
-                let completed = 0;
-                
-                batch.forEach(dbId => {
-                    model.getProperties(dbId, (result) => {
-                        // Check each property for matches
-                        if (result.properties) {
-                            for (const prop of result.properties) {
-                                // Check if any property value contains our search term
-                                const propValue = String(prop.displayValue || prop.displayName || '');
-                                if (propValue.toLowerCase().includes(searchLower)) {
-                                    console.log(`Found match in dbId: ${dbId}, property: ${prop.displayName}`);
-                                    if (!this.foundIds.includes(dbId)) {
-                                        this.foundIds.push(dbId);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        // Also check the name
-                        const name = result.name || '';
-                        if (name.toLowerCase().includes(searchLower) && !this.foundIds.includes(dbId)) {
-                            this.foundIds.push(dbId);
-                        }
-                        
-                        completed++;
-                        if (completed === batch.length) {
-                            // Process the next batch
-                            processBatch(batchIndex + 1);
-                        }
-                    });
-                });
-            };
-            
-            // Start processing with the first batch
-            processBatch(0);
-        })
+        });
     }
 }
+
+// Auto-register the extension
+Autodesk.Viewing.theExtensionManager.registerExtension(
+    'ElementFinderExtension', 
+    ElementFinderExtension
+);

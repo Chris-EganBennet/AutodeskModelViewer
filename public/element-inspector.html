@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Element Inspector Tool</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #viewer {
+            flex: 1;
+            height: 100%;
+        }
+        
+        #inspector-panel {
+            width: 350px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+        }
+        
+        .element-info {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .element-path {
+            word-break: break-all;
+            font-family: monospace;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        
+        .element-property {
+            margin: 5px 0;
+        }
+        
+        .property-name {
+            font-weight: bold;
+        }
+        
+        .copy-btn {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        
+        .copy-btn:hover {
+            background-color: #0055aa;
+        }
+        
+        .model-selector {
+            margin-bottom: 20px;
+        }
+        
+        h3 {
+            margin-top: 0;
+        }
+        
+        .qr-generator {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        .instruction {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #e6f7ff;
+            border: 1px solid #91d5ff;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="viewer"></div>
+        
+        <div id="inspector-panel">
+            <h2>Element Inspector</h2>
+            
+            <div class="instruction">
+                <p><strong>How to use:</strong> Click on any element in the model to see its details and full path.</p>
+            </div>
+            
+            <div class="model-selector">
+                <label for="models">Select Model:</label>
+                <select id="models" class="form-control">
+                    <option value="">Select a model</option>
+                </select>
+                <button id="load-model" class="copy-btn" style="margin-top: 10px;">Load Model</button>
+            </div>
+            
+            <div id="element-details">
+                <h3>Selected Element</h3>
+                <div class="element-info" style="display: none;">
+                    <div class="element-property">
+                        <span class="property-name">Name:</span>
+                        <span id="element-name">None selected</span>
+                    </div>
+                    
+                    <div class="element-property">
+                        <span class="property-name">DbId:</span>
+                        <span id="element-dbid">-</span>
+                    </div>
+                    
+                    <div class="element-property">
+                        <span class="property-name">Category:</span>
+                        <span id="element-category">-</span>
+                    </div>
+                    
+                    <h4>Element Path:</h4>
+                    <div class="element-path" id="element-path">Select an element to see its path</div>
+                    
+                    <div>
+                        <button id="copy-path" class="copy-btn">Copy Path</button>
+                        <button id="copy-id" class="copy-btn">Copy ID</button>
+                        <button id="copy-name" class="copy-btn">Copy Name</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="qr-generator">
+                <h3>Generate QR Code</h3>
+                <div class="form-group">
+                    <label for="highlight-method">Highlight Method:</label>
+                    <select id="highlight-method" class="form-control">
+                        <option value="id">Element ID</option>
+                        <option value="name">Element Name</option>
+                        <option value="path" selected>Element Path (Recommended)</option>
+                    </select>
+                </div>
+                
+                <button id="generate-qr" class="copy-btn">Generate QR</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const modelsSelect = document.getElementById('models');
+            const loadModelBtn = document.getElementById('load-model');
+            const elementNameEl = document.getElementById('element-name');
+            const elementDbIdEl = document.getElementById('element-dbid');
+            const elementCategoryEl = document.getElementById('element-category');
+            const elementPathEl = document.getElementById('element-path');
+            const copyPathBtn = document.getElementById('copy-path');
+            const copyIdBtn = document.getElementById('copy-id');
+            const copyNameBtn = document.getElementById('copy-name');
+            const highlightMethodSelect = document.getElementById('highlight-method');
+            const generateQrBtn = document.getElementById('generate-qr');
+            const elementInfoDiv = document.querySelector('.element-info');
+            
+            let viewer = null;
+            let selectedElement = null;
+            let pathHelper = null;
+            
+            // Load models for dropdown
+            async function loadModels() {
+                try {
+                    // Function to load demo models
+                    function loadDemoModels() {
+                        // Real models from your ACC account
+                        const accModels = [
+                            // Your actual model from ACC (with Base64 encoding)
+                            { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLlgzWm8tRGUxVGZLRGpwek04SEZmQXc_dmVyc2lvbj00', name: 'FF - Externals (Real ACC Model)' },
+                            { urn: 'dXJuOmFkc2sud2lwZW1lYTpmcy5maWxlOnZmLmhmR25yTjlmU3lLZHVnTWhpQ3pOWmc_dmVyc2lvbj00', name: 'Collins - Kilnaboy' },
+                            
+                            // Demo models as fallback
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9mb28uZHdm', name: 'Pine Timber (Demo)' },
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9iYXIuZHdm', name: 'Oak Timber (Demo)' },
+                            { urn: 'dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6bW9kZWwtMjAyMS9iYXouZHdm', name: 'Maple Timber (Demo)' }
+                        ];
+                        
+                        accModels.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model.urn;
+                            option.textContent = model.name;
+                            modelsSelect.appendChild(option);
+                        });
+                    }
+                    
+                    // Try to get token
+                    const tokenResponse = await fetch('/api/token');
+                    const tokenData = await tokenResponse.json();
+                    
+                    if (!tokenData.access_token) {
+                        throw new Error('Failed to get token');
+                    }
+                    
+                    // Just load demo models for simplicity
+                    loadDemoModels();
+                    
+                } catch (error) {
+                    console.error('Error loading models:', error);
+                    alert('Failed to load models. See console for details.');
+                }
+            }
+            
+            // Initialize the viewer
+            async function initViewer() {
+                const viewerElement = document.getElementById('viewer');
+                
+                viewer = new Autodesk.Viewing.GuiViewer3D(viewerElement, {
+                    extensions: ['Autodesk.DocumentBrowser']
+                });
+                
+                const options = {
+                    env: 'AutodeskProduction',
+                    api: 'derivativeV2',
+                    getAccessToken: async (onTokenReady) => {
+                        try {
+                            const response = await fetch('/api/token');
+                            const data = await response.json();
+                            const token = data.access_token;
+                            onTokenReady(token, 3600);
+                        } catch (error) {
+                            console.error('Error getting token:', error);
+                            onTokenReady('', 0);
+                        }
+                    }
+                };
+                
+                Autodesk.Viewing.Initializer(options, () => {
+                    viewer.start();
+                    console.log('Viewer initialized');
+                    
+                    // Set up selection change event
+                    viewer.addEventListener(Autodesk.Viewing.SELECTION_CHANGED_EVENT, onSelectionChange);
+                });
+            }
+            
+            // Load a model
+            function loadModel(urn) {
+                if (!viewer) {
+                    console.error('Viewer not initialized');
+                    return;
+                }
+                
+                const documentId = urn.startsWith('urn:') ? urn : `urn:${urn}`;
+                
+                Autodesk.Viewing.Document.load(
+                    documentId,
+                    (doc) => {
+                        const viewables = doc.getRoot().getDefaultGeometry();
+                        viewer.loadDocumentNode(doc, viewables);
+                        
+                        // Initialize element path helper once model is loaded
+                        viewer.addEventListener(Autodesk.Viewing.GEOMETRY_LOADED_EVENT, () => {
+                            setTimeout(() => {
+                                pathHelper = new ElementPathHelper(viewer);
+                                console.log('Element path helper initialized');
+                            }, 1000);
+                        });
+                    },
+                    (error) => {
+                        console.error('Error loading document:', error);
+                        alert(`Error loading model: ${error.message || error}`);
+                    }
+                );
+            }
+            
+            // Handle selection change
+            function onSelectionChange(event) {
+                const dbIds = viewer.getSelection();
+                if (dbIds.length === 0) {
+                    selectedElement = null;
+                    elementInfoDiv.style.display = 'none';
+                    return;
+                }
+                
+                const dbId = dbIds[0];
+                selectedElement = { dbId };
+                
+                // Show the element info div
+                elementInfoDiv.style.display = 'block';
+                
+                // Get properties for this element
+                viewer.model.getProperties(dbId, (props) => {
+                    selectedElement.name = props.name || 'Unnamed Element';
+                    selectedElement.category = props.category || 'Uncategorized';
+                    selectedElement.externalId = props.externalId || '';
+                    
+                    // Update UI
+                    elementNameEl.textContent = selectedElement.name;
+                    elementDbIdEl.textContent = selectedElement.dbId;
+                    elementCategoryEl.textContent = selectedElement.category;
+                    
+                    // Get element path
+                    if (pathHelper) {
+                        pathHelper.getElementPath(dbId).then(path => {
+                            selectedElement.path = path;
+                            elementPathEl.textContent = path;
+                        });
+                    } else {
+                        elementPathEl.textContent = 'Path helper not initialized';
+                    }
+                });
+            }
+            
+            // Copy functions
+            copyPathBtn.addEventListener('click', () => {
+                if (selectedElement && selectedElement.path) {
+                    navigator.clipboard.writeText(selectedElement.path)
+                        .then(() => alert('Path copied to clipboard'))
+                        .catch(err => console.error('Error copying path:', err));
+                }
+            });
+            
+            copyIdBtn.addEventListener('click', () => {
+                if (selectedElement) {
+                    navigator.clipboard.writeText(selectedElement.dbId.toString())
+                        .then(() => alert('ID copied to clipboard'))
+                        .catch(err => console.error('Error copying ID:', err));
+                }
+            });
+            
+            copyNameBtn.addEventListener('click', () => {
+                if (selectedElement && selectedElement.name) {
+                    navigator.clipboard.writeText(selectedElement.name)
+                        .then(() => alert('Name copied to clipboard'))
+                        .catch(err => console.error('Error copying name:', err));
+                }
+            });
+            
+            // Load model button
+            loadModelBtn.addEventListener('click', () => {
+                const urn = modelsSelect.value;
+                if (!urn) {
+                    alert('Please select a model first');
+                    return;
+                }
+                
+                loadModel(urn);
+            });
+            
+            // Generate QR code
+            generateQrBtn.addEventListener('click', async () => {
+                if (!selectedElement) {
+                    alert('Please select an element first');
+                    return;
+                }
+                
+                const urn = modelsSelect.value;
+                if (!urn) {
+                    alert('No model selected');
+                    return;
+                }
+                
+                const highlightMethod = highlightMethodSelect.value;
+                
+                try {
+                    let apiUrl = `/api/qrcode/${urn}`;
+                    
+                    // Add parameters based on selected method
+                    if (highlightMethod === 'id') {
+                        apiUrl += `?elementId=${selectedElement.dbId}`;
+                    } else if (highlightMethod === 'name') {
+                        apiUrl += `?elementId=${encodeURIComponent(selectedElement.name)}`;
+                    } else if (highlightMethod === 'path' && selectedElement.path) {
+                        apiUrl += `?elementPath=${encodeURIComponent(selectedElement.path)}`;
+                    }
+                    
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    // Open QR code in a new tab or window
+                    const newWindow = window.open('', '_blank');
+                    newWindow.document.write(`
+                        <html>
+                        <head>
+                            <title>QR Code for Selected Element</title>
+                            <style>
+                                body {
+                                    font-family: Arial, sans-serif;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    padding: 20px;
+                                }
+                                img {
+                                    max-width: 300px;
+                                    border: 1px solid #ddd;
+                                    padding: 10px;
+                                    margin-bottom: 20px;
+                                }
+                                .url {
+                                    word-break: break-all;
+                                    font-family: monospace;
+                                    padding: 10px;
+                                    background-color: #f0f0f0;
+                                    border-radius: 4px;
+                                    margin-bottom: 20px;
+                                    max-width: 600px;
+                                }
+                                .buttons {
+                                    display: flex;
+                                    gap: 10px;
+                                }
+                                button {
+                                    padding: 10px 15px;
+                                    background-color: #0066cc;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 4px;
+                                    cursor: pointer;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>QR Code for Selected Element</h1>
+                            <img src="${data.qrCode}" alt="QR Code">
+                            <h3>URL:</h3>
+                            <div class="url">${data.url}</div>
+                            <div class="buttons">
+                                <button onclick="window.open('${data.url}', '_blank')">Test Link</button>
+                                <button onclick="navigator.clipboard.writeText('${data.url}').then(() => alert('URL copied!'))">Copy URL</button>
+                                <button onclick="downloadQR()">Download QR Code</button>
+                            </div>
+                            <script>
+                                function downloadQR() {
+                                    const link = document.createElement('a');
+                                    link.href = "${data.qrCode}";
+                                    link.download = "qrcode-element-${selectedElement.dbId}.png";
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                }
+                            </script>
+                        </body>
+                        </html>
+                    `);
+                    newWindow.document.close();
+                    
+                } catch (error) {
+                    console.error('Error generating QR code:', error);
+                    alert('Failed to generate QR code: ' + error.message);
+                }
+            });
+            
+            // Initialize
+            initViewer();
+            loadModels();
+        });
+        
+        // Element Path Helper class
+        class ElementPathHelper {
+            constructor(viewer) {
+                this.viewer = viewer;
+                this.model = viewer.model;
+            }
+            
+            async getElementPath(dbId) {
+                return new Promise((resolve) => {
+                    const instanceTree = this.model.getInstanceTree();
+                    if (!instanceTree) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const path = [];
+                    let currentId = dbId;
+                    
+                    const processNode = () => {
+                        this.model.getProperties(currentId, (props) => {
+                            path.unshift(props.name || `[${currentId}]`);
+                            
+                            const parentId = instanceTree.getNodeParentId(currentId);
+                            if (parentId !== instanceTree.getRootId() && parentId !== currentId) {
+                                currentId = parentId;
+                                processNode();
+                            } else {
+                                resolve(path.join('/'));
+                            }
+                        });
+                    };
+                    
+                    processNode();
+                });
+            }
+            
+            async findElementByPath(path) {
+                // Implementation details would be similar to the standalone ElementPathHelper.js
+                console.log('Finding element by path (stub):', path);
+                return [];
+            }
+        }
+    </script>
+</body>
+</html>
