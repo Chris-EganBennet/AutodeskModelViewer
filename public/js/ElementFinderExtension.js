@@ -181,6 +181,105 @@ class ElementFinderExtension extends Autodesk.Viewing.Extension {
             });
         });
     }
+
+    // Update ElementFinderExtension.js to add PTP Assembly Name highlighting
+
+    // Add this method to the ElementFinderExtension class
+    async findElementsByPTPAssemblyName(assemblyName) {
+        this.log(`Searching for elements with PTP_Assembly_Name: "${assemblyName}"`);
+        
+        const model = this.viewer.model;
+        if (!model) {
+        console.error('Model not available');
+        return;
+        }
+        
+        this.foundIds = [];
+        
+        try {
+        // Get all elements in the model
+        const instanceTree = model.getInstanceTree();
+        if (!instanceTree) {
+            this.log('Instance tree not available');
+            return;
+        }
+        
+        // Track processed nodes to avoid duplicates
+        const processed = new Set();
+        
+        // Process each node to check PTP_Assembly_Name property
+        const checkNode = (dbId) => {
+            return new Promise((resolve) => {
+            if (processed.has(dbId)) {
+                resolve();
+                return;
+            }
+            
+            processed.add(dbId);
+            
+            model.getProperties(dbId, (props) => {
+                // Check all properties for PTP_Assembly_Name
+                if (props.properties) {
+                const ptpAssemblyProp = props.properties.find(p => 
+                    p.displayName === 'PTP_Assembly_Name' || 
+                    p.displayName === 'PTP Assembly Name' ||
+                    p.displayName === 'PTPAssemblyName');
+                    
+                if (ptpAssemblyProp && ptpAssemblyProp.displayValue === assemblyName) {
+                    this.log(`Found matching element with dbId: ${dbId}, name: ${props.name || 'unnamed'}`);
+                    this.foundIds.push(dbId);
+                }
+                }
+                resolve();
+            });
+            });
+        };
+        
+        // Use a queue for breadth-first traversal
+        const queue = [];
+        
+        // Start with root node
+        const rootId = instanceTree.getRootId();
+        
+        // Enumerate all nodes starting from root
+        const allDbIds = [];
+        instanceTree.enumNodeChildren(rootId, (dbId) => {
+            allDbIds.push(dbId);
+            
+            // Also get children of this node
+            instanceTree.enumNodeChildren(dbId, (childId) => {
+            if (!allDbIds.includes(childId)) {
+                allDbIds.push(childId);
+            }
+            });
+        });
+        
+        this.log(`Checking ${allDbIds.length} elements for PTP_Assembly_Name...`);
+        
+        // Process in batches to avoid performance issues
+        const batchSize = 50;
+        for (let i = 0; i < allDbIds.length; i += batchSize) {
+            const batch = allDbIds.slice(i, i + batchSize);
+            await Promise.all(batch.map(dbId => checkNode(dbId)));
+            
+            // If we already found some matches, no need to process all elements
+            if (this.foundIds.length > 0 && i >= 500) {
+            this.log(`Found ${this.foundIds.length} matches, stopping further search.`);
+            break;
+            }
+        }
+        
+        this.log(`Found ${this.foundIds.length} elements with PTP_Assembly_Name: "${assemblyName}"`);
+        
+        if (this.foundIds.length > 0) {
+            this.highlightElements(this.foundIds);
+        } else {
+            this.log(`No elements found with PTP_Assembly_Name: "${assemblyName}"`);
+        }
+        } catch (error) {
+        console.error('Error searching for PTP_Assembly_Name:', error);
+        }
+    }
     
     // Highlight the found elements
     highlightElements(dbIds) {

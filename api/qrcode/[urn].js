@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
     // Get element ID parameters - support both formats
     const elementId = req.query.elementId || '';
     const elementPath = req.query.elementPath || '';
+    const ptpAssemblyName = req.query.PTPAssemblyName || '';
     
     if (!urn) {
       return res.status(400).json({ error: 'URN parameter is required' });
@@ -40,8 +41,14 @@ module.exports = async (req, res) => {
     if (elementPath) {
       url += `&elementPath=${encodeURIComponent(elementPath)}`;
     }
+
+    // Add PTP Assembly Name if provided
+    if (ptpAssemblyName) {
+      url += `&PTPAssemblyName=${encodeURIComponent(ptpAssemblyName)}`;
+    }
     
     const qrCode = await QRCode.toDataURL(url);
+    
     
     res.status(200).json({ 
       qrCode, 
@@ -49,7 +56,8 @@ module.exports = async (req, res) => {
       params: {
         urn,
         elementId: elementId || null,
-        elementPath: elementPath || null
+        elementPath: elementPath || null,
+        ptpAssemblyName: ptpAssemblyName || null
       }
     });
   } catch (error) {

@@ -67,11 +67,14 @@
             console.log(`[DEBUG] ${message}`);
         }
         
+        // In view.html, update the URL parameters section:
+
         const urlParams = new URLSearchParams(window.location.search);
         const urn = urlParams.get('urn');
         const elementId = urlParams.get('elementId');
         const elementPath = urlParams.get('elementPath');
-        
+        const ptpAssemblyName = urlParams.get('PTPAssemblyName');
+
         debugLog(`URN from URL: ${urn}`);
         if (elementId) {
             debugLog(`Element ID to highlight: ${elementId}`);
@@ -79,14 +82,8 @@
         if (elementPath) {
             debugLog(`Element Path to highlight: ${elementPath}`);
         }
-        
-        if (!urn) {
-            document.getElementById('model-info').innerHTML = 'No model selected';
-            debugLog('No URN provided in URL', 'error');
-        } else {
-            // Initialize viewer
-            debugLog('Initializing viewer...');
-            initViewer();
+        if (ptpAssemblyName) {
+            debugLog(`PTP Assembly Name to highlight: ${ptpAssemblyName}`);
         }
 
         async function initViewer() {
@@ -175,6 +172,24 @@
                                     .catch(err => {
                                         debugLog(`Error processing element path: ${err.message}`, 'error');
                                     });
+                            }, 2000);
+                        });
+                    }
+
+                    // Check for PTP Assembly Name
+                    if (ptpAssemblyName) {
+                        viewer.addEventListener(Autodesk.Viewing.OBJECT_TREE_CREATED_EVENT, function() {
+                            // Allow time for the model to fully load
+                            setTimeout(() => {
+                                debugLog(`Searching for elements with PTP Assembly Name: ${ptpAssemblyName}`, 'info');
+                                
+                                // Get extension and use it to find elements
+                                const elementFinder = viewer.getExtension('ElementFinderExtension');
+                                if (elementFinder) {
+                                    elementFinder.findElementsByPTPAssemblyName(ptpAssemblyName);
+                                } else {
+                                    debugLog('ElementFinderExtension not available for PTP Assembly search', 'error');
+                                }
                             }, 2000);
                         });
                     }

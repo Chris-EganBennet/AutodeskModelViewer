@@ -167,7 +167,13 @@
                         <option value="id">Element ID</option>
                         <option value="name">Element Name</option>
                         <option value="path" selected>Element Path (Recommended)</option>
+                        <option value="ptpAssembly">PTP Assembly Name</option>
                     </select>
+                </div>
+                
+                <div class="form-group" id="ptp-assembly-input" style="display:none;">
+                    <label for="ptp-assembly-name">PTP Assembly Name:</label>
+                    <input type="text" id="ptp-assembly-name" class="form-control" placeholder="Enter PTP Assembly Name (e.g., FF-E36)">
                 </div>
                 
                 <button id="generate-qr" class="copy-btn">Generate QR</button>
@@ -193,7 +199,59 @@
             let viewer = null;
             let selectedElement = null;
             let pathHelper = null;
-            
+
+            // In your existing JavaScript, add this to handle the highlight method change
+            highlightMethodSelect.addEventListener('change', () => {
+                const method = highlightMethodSelect.value;
+                const ptpAssemblyInput = document.getElementById('ptp-assembly-input');
+                
+                // Show the PTP Assembly input field only when that method is selected
+                if (method === 'ptpAssembly') {
+                    ptpAssemblyInput.style.display = 'block';
+                } else {
+                    ptpAssemblyInput.style.display = 'none';
+                }
+            });
+
+            // And modify the generate QR button event handler to include PTP Assembly
+            generateQrBtn.addEventListener('click', async () => {
+                const urn = modelsSelect.value;
+                if (!urn) {
+                    alert('Please select a model first');
+                    return;
+                }
+                
+                const highlightMethod = highlightMethodSelect.value;
+                
+                try {
+                    let apiUrl = `/api/qrcode/${urn}`;
+                    
+                    // Add parameters based on selected method
+                    if (highlightMethod === 'id' && selectedElement) {
+                        apiUrl += `?elementId=${selectedElement.dbId}`;
+                    } else if (highlightMethod === 'name' && selectedElement) {
+                        apiUrl += `?elementId=${encodeURIComponent(selectedElement.name)}`;
+                    } else if (highlightMethod === 'path' && selectedElement && selectedElement.path) {
+                        apiUrl += `?elementPath=${encodeURIComponent(selectedElement.path)}`;
+                    } else if (highlightMethod === 'ptpAssembly') {
+                        const ptpAssemblyName = document.getElementById('ptp-assembly-name').value.trim();
+                        if (!ptpAssemblyName) {
+                            alert('Please enter a PTP Assembly Name');
+                            return;
+                        }
+                        apiUrl += `?PTPAssemblyName=${encodeURIComponent(ptpAssemblyName)}`;
+                    } else {
+                        alert('Please select an element or enter a PTP Assembly name depending on your highlight method');
+                        return;
+                    }
+                    
+                    // Rest of your code for generating and displaying the QR code...
+                } catch (error) {
+                    console.error('Error generating QR code:', error);
+                    alert('Failed to generate QR code: ' + error.message);
+                }
+            });
+        
             // Load models for dropdown
             async function loadModels() {
                 try {
