@@ -178,19 +178,19 @@
 
                     // Check for PTP Assembly Name
                     if (ptpAssemblyName) {
-                        viewer.addEventListener(Autodesk.Viewing.OBJECT_TREE_CREATED_EVENT, function() {
-                            // Allow time for the model to fully load
-                            setTimeout(() => {
-                                debugLog(`Searching for elements with PTP Assembly Name: ${ptpAssemblyName}`, 'info');
-                                
-                                // Get extension and use it to find elements
-                                const elementFinder = viewer.getExtension('ElementFinderExtension');
-                                if (elementFinder) {
-                                    elementFinder.findElementsByPTPAssemblyName(ptpAssemblyName);
-                                } else {
-                                    debugLog('ElementFinderExtension not available for PTP Assembly search', 'error');
-                                }
-                            }, 2000);
+                        // Always load the extension
+                        viewer.loadExtension('ElementFinderExtension', {
+                            // Can pass options here if needed
+                        }).then(extension => {
+                            viewer.addEventListener(Autodesk.Viewing.GEOMETRY_LOADED_EVENT, function() {
+                                // Allow time for the model to fully load
+                                setTimeout(() => {
+                                    debugLog(`Searching for elements with PTP Assembly Name: ${ptpAssemblyName}`, 'info');
+                                    extension.findElementsByPTPAssemblyName(ptpAssemblyName);
+                                }, 2000);
+                            });
+                        }).catch(err => {
+                            debugLog(`Error loading ElementFinderExtension: ${err}`, 'error');
                         });
                     }
                     
